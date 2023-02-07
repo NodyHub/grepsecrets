@@ -131,14 +131,14 @@ func checkLine(line string) bool {
 }
 
 const (
-	usage = `usage: %s [files]
+	usage = `usage: %s [-v] [files]
 grepsecrets searches for secrets in provided input.
 
 Default reads from stdin
 
 Options:
 --------
-[files] provide the urls in files.
+[files] provide the files.
 `
 )
 
