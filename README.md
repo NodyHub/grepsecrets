@@ -34,7 +34,7 @@ github.com/NodyHub/grepsecrets@(devel) 2023-02-07T14:02:20Z
 ## Current list of secrets & patterns
 
 ```shell
-$ grepsecrets -l
+$ grepsecrets -p
 AWS API Key: "AKIA[0-9A-Z]{16}"
 Amazon AWS Access Key ID: "AKIA[0-9A-Z]{16}"
 Amazon MWS Auth Token: "amzn\\.mws\\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
