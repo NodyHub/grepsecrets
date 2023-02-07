@@ -23,10 +23,12 @@ Default reads from stdin
 Options:
 --------
 [files] provide the files.
-  -l	List patterns
+  -l	List path to file that contain secrets
+  -p	List patterns
+  -r	Recurisive directory traversal
   -v	Verbose output
 
-github.com/NodyHub/grepsecrets@(devel) 2023-02-07T11:02:43Z
+github.com/NodyHub/grepsecrets@(devel) 2023-02-07T14:02:20Z
 ```
 
 ## Current list of secrets & patterns

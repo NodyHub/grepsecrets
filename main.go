@@ -80,20 +80,58 @@ func filter(ss []string, test func(string) bool) (ret []string) {
 	return
 }
 
-// analyzeFile reads file line-by-line and assume that they are all urls
-func analyzeFile(inputFile string) {
-	// Read while file content
-	log.Printf("Reading %s", inputFile)
-	rawLines, err := os.ReadFile(inputFile)
+func readDirectory(listFilepath bool, directoryName string) {
+	log.Printf("Scan directory %v\n", directoryName)
+	files, err := ioutil.ReadDir(directoryName)
 	if err != nil {
+		log.Printf("ERROR: %v\n", err)
+		return
+	}
+	for _, file := range files {
+		analyzeFile(listFilepath, true, fmt.Sprintf("%v/%v", directoryName, file.Name()))
+	}
+}
+
+// analyzeFile reads file line-by-line and assume that they are all urls
+func analyzeFile(listFilepath, recursive bool, inputFile string) {
+
+	file, err := os.Open(inputFile)
+	if err != nil {
+		log.Printf("ERROR: %v", err)
+		return
+	}
+	defer file.Close()
+
+	// This returns an *os.FileInfo type
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.Printf("ERROR: %v", err)
 		return
 	}
 
-	lines := strings.Split(string(rawLines), "\n")
-	log.Printf("Read %v lines", len(lines))
-	for _, line := range lines {
-		if checkLine(line) {
-			fmt.Println(line)
+	// IsDir is short for fileInfo.Mode().IsDir()
+	if fileInfo.IsDir() {
+		readDirectory(listFilepath, inputFile)
+	} else {
+		// Read while file content
+		log.Printf("Reading %s", inputFile)
+		rawLines, err := os.ReadFile(inputFile)
+		if err != nil {
+			log.Printf("ERROR: %v", err)
+			return
+		}
+
+		lines := strings.Split(string(rawLines), "\n")
+		log.Printf("Read %v lines", len(lines))
+		for _, line := range lines {
+			if checkLine(line) {
+				if listFilepath {
+					fmt.Println(inputFile)
+					return
+				} else {
+					fmt.Println(line)
+				}
+			}
 		}
 	}
 }
@@ -158,8 +196,9 @@ func main() {
 	version := bi.Main.Version
 
 	// Read cli param
-	// recursive := flag.Bool("v", false, "Recurisive directory traversal")
-	listPatterns := flag.Bool("l", false, "List patterns")
+	recursive := flag.Bool("r", false, "Recurisive directory traversal")
+	listFilepath := flag.Bool("l", false, "List path to file that contain secrets")
+	listPatterns := flag.Bool("p", false, "List patterns")
 	verbose := flag.Bool("v", false, "Verbose output")
 	flag.Usage = func() {
 		log.SetFlags(0)
@@ -198,7 +237,7 @@ func main() {
 		} else {
 			// Read files
 			for _, ifile := range input {
-				analyzeFile(ifile)
+				analyzeFile(*listFilepath, *recursive, ifile)
 			}
 		}
 	}
