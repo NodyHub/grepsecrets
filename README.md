@@ -6,7 +6,7 @@ Grep Secrets from input
 
 
 ```shell
-$ go install github.com/NodyHub/fifi@latest
+$ go install github.com/NodyHub/grepsecrets@latest
 
 ```
 Or download latest release manual [here](https://github.com/NodyHub/grepsecrets/releases).
