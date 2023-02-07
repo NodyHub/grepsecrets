@@ -9,6 +9,8 @@ Grep Secrets from input
 $ go install github.com/NodyHub/fifi@latest
 
 ```
+Or download latest release manual [here](https://github.com/NodyHub/grepsecrets/releases).
+
 ## Usage
 
 ```shell
