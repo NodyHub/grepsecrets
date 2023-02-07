@@ -131,7 +131,7 @@ func checkLine(line string) bool {
 }
 
 const (
-	usage = `usage: %s [-v] [files]
+	usage = `usage: %s [flags] [files]
 grepsecrets searches for secrets in provided input.
 
 Default reads from stdin
@@ -157,6 +157,7 @@ func main() {
 
 	// Read cli param
 	// recursive := flag.Bool("v", false, "Recurisive directory traversal")
+	listPatterns := flag.Bool("l", false, "List patterns")
 	verbose := flag.Bool("v", false, "Verbose output")
 	flag.Usage = func() {
 		log.SetFlags(0)
@@ -173,14 +174,21 @@ func main() {
 		log.SetOutput(ioutil.Discard)
 	}
 
-	// Analyze input
-	if len(input) == 0 {
-		log.Println("reading from stdin...")
-		readFromStdin()
+	if *listPatterns {
+		for title, regexPattern := range KnownRegex {
+			fmt.Printf("%v: \"%v\"\n", title, regexPattern)
+		}
 	} else {
-		// Read files
-		for _, ifile := range input {
-			analyzeFile(ifile)
+
+		// Analyze input
+		if len(input) == 0 {
+			log.Println("reading from stdin...")
+			readFromStdin()
+		} else {
+			// Read files
+			for _, ifile := range input {
+				analyzeFile(ifile)
+			}
 		}
 	}
 
