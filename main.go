@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"runtime/debug"
 	"strings"
+
+	"sort"
 )
 
 type cliParameter struct {
@@ -175,9 +177,18 @@ func main() {
 	}
 
 	if *listPatterns {
-		for title, regexPattern := range KnownRegex {
-			fmt.Printf("%v: \"%v\"\n", title, regexPattern)
+		// Collect titles and sort them
+		titles := make([]string, 0, len(KnownRegex))
+		for title := range KnownRegex {
+			titles = append(titles, title)
 		}
+		sort.Strings(titles)
+
+		// Print title and patterns
+		for _, title := range titles {
+			fmt.Printf("%v: \"%v\"\n", title, KnownRegex[title])
+		}
+
 	} else {
 
 		// Analyze input
