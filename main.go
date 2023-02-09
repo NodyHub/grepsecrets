@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	_ "embed"
 	"flag"
 	"fmt"
 	"io"
@@ -10,20 +11,31 @@ import (
 	"os"
 	"regexp"
 	"runtime/debug"
+	"sort"
 	"strings"
 
-	"sort"
+	"gopkg.in/yaml.v2"
+)
+
+var (
+	//go:embed secrets-patterns-db/db/rules-stable.yml
+	embeddedRules []byte
 )
 
 type cliParameter struct {
-	Recursive bool
-	Verbose   bool
+	ExternalRules bool
+	Recursive     bool
+	ListFilepath  bool
+	ListPatterns  bool
+	Verbose       bool
 }
 
 type SecretRegex struct {
 	Title string
-	Regex string
+	Regex regexp.Regexp
 }
+
+var SearchPatterns []SecretRegex
 
 var KnownRegex = map[string]string{
 	"Cloudinary":                    `cloudinary://.*`,
@@ -76,11 +88,70 @@ func filter(ss []string, test func(string) bool) (ret []string) {
 			ret = append(ret, s)
 		}
 	}
-
 	return
 }
 
-func readDirectory(listFilepath bool, directoryName string) {
+func parseRegex(ARGS cliParameter) {
+	if ARGS.ExternalRules {
+
+		// Parse rules from external repo
+
+		type PatternStruct struct {
+			Name       string `yaml:"name"`
+			Regex      string `yaml:"regex"`
+			Confidence string `yaml:"confidence"`
+		}
+
+		type PatternsList struct {
+			PatElem PatternStruct `yaml:"pattern"`
+		}
+
+		type PatternsFile struct {
+			Patterns []PatternsList `yaml:"patterns"`
+		}
+
+		var externalPatternsFile PatternsFile
+		log.Printf("Loaded bytes: %v\n", len(embeddedRules))
+		err := yaml.Unmarshal(embeddedRules, &externalPatternsFile)
+		if err != nil {
+			panic(err)
+		}
+		for _, pattern := range externalPatternsFile.Patterns {
+			re, err := regexp.Compile(pattern.PatElem.Regex)
+			if err != nil {
+				log.Printf("Error compilingregex: %v\n", err.Error())
+			} else {
+				SearchPatterns = append(SearchPatterns,
+					SecretRegex{
+						Title: pattern.PatElem.Name,
+						Regex: *re,
+					},
+				)
+			}
+		}
+
+	} else {
+
+		// Parse static coded rules
+		SearchPatterns = make([]SecretRegex, 0, len(KnownRegex))
+		for title, regex := range KnownRegex {
+			re, err := regexp.Compile(regex)
+			if err != nil {
+				log.Printf("Error compilingregex: %v\n", err.Error())
+			} else {
+				SearchPatterns = append(SearchPatterns,
+					SecretRegex{
+						Title: title,
+						Regex: *re,
+					},
+				)
+
+			}
+		}
+	}
+}
+
+func readDirectory(ARGS cliParameter, directoryName string) {
 	log.Printf("Scan directory %v\n", directoryName)
 	files, err := ioutil.ReadDir(directoryName)
 	if err != nil {
@@ -88,12 +159,12 @@ func readDirectory(listFilepath bool, directoryName string) {
 		return
 	}
 	for _, file := range files {
-		analyzeFile(listFilepath, true, fmt.Sprintf("%v/%v", directoryName, file.Name()))
+		analyzeFile(ARGS, fmt.Sprintf("%v/%v", directoryName, file.Name()))
 	}
 }
 
 // analyzeFile reads file line-by-line and assume that they are all urls
-func analyzeFile(listFilepath, recursive bool, inputFile string) {
+func analyzeFile(ARGS cliParameter, inputFile string) {
 
 	file, err := os.Open(inputFile)
 	if err != nil {
@@ -110,8 +181,8 @@ func analyzeFile(listFilepath, recursive bool, inputFile string) {
 	}
 
 	// IsDir is short for fileInfo.Mode().IsDir()
-	if fileInfo.IsDir() {
-		readDirectory(listFilepath, inputFile)
+	if fileInfo.IsDir() && ARGS.Recursive {
+		readDirectory(ARGS, inputFile)
 	} else {
 		// Read while file content
 		log.Printf("Reading %s", inputFile)
@@ -121,16 +192,14 @@ func analyzeFile(listFilepath, recursive bool, inputFile string) {
 			return
 		}
 
-		lines := strings.Split(string(rawLines), "\n")
-		log.Printf("Read %v lines", len(lines))
-		for _, line := range lines {
-			if checkLine(line) {
-				if listFilepath {
-					fmt.Println(inputFile)
-					return
-				} else {
-					fmt.Println(line)
-				}
+		lines := string(rawLines)
+		log.Printf("Read %v lines", len(strings.Split(lines, "\n")))
+		if success, match := checkLines(lines); success {
+			if ARGS.ListFilepath {
+				fmt.Println(inputFile)
+				return
+			} else {
+				fmt.Println(match)
 			}
 		}
 	}
@@ -150,8 +219,8 @@ func readFromStdin() {
 		}
 
 		line := strings.TrimSpace(s)
-		if checkLine(line) {
-			matches = append(matches, line)
+		if success, match := checkLines(line); success {
+			matches = append(matches, match)
 		}
 	}
 	for _, match := range matches {
@@ -159,15 +228,14 @@ func readFromStdin() {
 	}
 }
 
-func checkLine(line string) bool {
-	for title, regexPattern := range KnownRegex {
-		matched, _ := regexp.MatchString(regexPattern, line)
-		if matched {
-			log.Printf("Found %s !!!\n", title)
-			return true
+func checkLines(line string) (bool, string) {
+	for _, pattern := range SearchPatterns {
+		if found := pattern.Regex.FindString(line); len(found) > 0 {
+			log.Printf("Found %s (Pattern: %v) !!! \n", pattern.Title, pattern.Regex.String())
+			return true, found
 		}
 	}
-	return false
+	return false, ""
 }
 
 const (
@@ -198,6 +266,7 @@ func main() {
 	// Read cli param
 	recursive := flag.Bool("r", false, "Recurisive directory traversal")
 	listFilepath := flag.Bool("l", false, "List path to file that contain secrets")
+	externalRules := flag.Bool("x", false, "Use external rule for analysis")
 	listPatterns := flag.Bool("p", false, "List patterns")
 	verbose := flag.Bool("v", false, "Verbose output")
 	flag.Usage = func() {
@@ -208,24 +277,35 @@ func main() {
 	}
 	flag.Parse()
 	input := flag.Args()
+	ARGS := cliParameter{
+		ExternalRules: *externalRules,
+		Recursive:     *recursive,
+		ListFilepath:  *listFilepath,
+		ListPatterns:  *listPatterns,
+		Verbose:       *verbose,
+	}
 
-	if *verbose {
+	if ARGS.Verbose {
 		log.SetOutput(flag.CommandLine.Output())
 	} else {
 		log.SetOutput(ioutil.Discard)
 	}
 
+	// Read patterns from embedded FS
+	parseRegex(ARGS)
+	log.Printf("Loaded %v pattern\n", len(SearchPatterns))
+
 	if *listPatterns {
 		// Collect titles and sort them
-		titles := make([]string, 0, len(KnownRegex))
-		for title := range KnownRegex {
-			titles = append(titles, title)
+		titles := make([]string, 0, len(SearchPatterns))
+		for _, pattern := range SearchPatterns {
+			titles = append(titles, fmt.Sprintf("%v: `%v`", pattern.Title, pattern.Regex))
 		}
 		sort.Strings(titles)
 
 		// Print title and patterns
 		for _, title := range titles {
-			fmt.Printf("%v: \"%v\"\n", title, KnownRegex[title])
+			fmt.Println(title)
 		}
 
 	} else {
@@ -237,7 +317,7 @@ func main() {
 		} else {
 			// Read files
 			for _, ifile := range input {
-				analyzeFile(*listFilepath, *recursive, ifile)
+				analyzeFile(ARGS, ifile)
 			}
 		}
 	}
