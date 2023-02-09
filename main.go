@@ -299,7 +299,7 @@ func main() {
 		// Collect titles and sort them
 		titles := make([]string, 0, len(SearchPatterns))
 		for _, pattern := range SearchPatterns {
-			titles = append(titles, fmt.Sprintf("%v: `%v`", pattern.Title, pattern.Regex))
+			titles = append(titles, fmt.Sprintf("%v: `%v`", pattern.Title, pattern.Regex.String()))
 		}
 		sort.Strings(titles)
 
